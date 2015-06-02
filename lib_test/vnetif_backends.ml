@@ -14,11 +14,16 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module Trailing_bytes = struct
+module type Backend = sig
+    include Vnetif.BACKEND
+    val create : unit -> t
+end
+
+module Trailing_bytes : Backend = struct
   module X = Basic_backend.Make
   include X
 
-  let max_bytes_to_add = Int32.of_int 512
+  let max_bytes_to_add = Int32.of_int 42
 
   (* Just adds trailing bytes, doesn't store anything in them *)
   let add_random_bytes src =
@@ -35,4 +40,15 @@ module Trailing_bytes = struct
     let new_buffers = List.map (fun a -> (add_random_bytes a)) buffers in
     X.writev t id new_buffers
 
+  let create () =
+    X.create ~use_async_readers:true ~yield:(fun() -> Lwt_main.yield () ) () 
+
+end 
+
+module Basic : Backend = struct
+  module X = Basic_backend.Make
+  include X
+      
+  let create () =
+    X.create ~use_async_readers:true ~yield:(fun() -> Lwt_main.yield () ) () 
 end
