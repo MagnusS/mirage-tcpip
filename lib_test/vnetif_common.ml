@@ -28,17 +28,17 @@ module Console = Console_unix
 (* TODO These modules and signatures should eventually be moved to mirage-vnetif *)
 module type VNETIF_STACK =
 sig
-    type backend
-    type buffer
-    type 'a io
-    type id
-    module Stackv4 : V1_LWT.STACKV4
-    val create_backend : unit -> backend
-    val create_stack : Console.t -> backend -> Ipaddr.V4.t -> Ipaddr.V4.t -> Ipaddr.V4.t list -> Stackv4.t Lwt.t
-    val create_backend_listener : backend -> (buffer -> unit io) -> id
-    val disable_backend_listener : backend -> id -> unit
-    val create_pcap_recorder : backend -> Lwt_io.output_channel -> int Lwt.t
-    val record_pcap : backend -> string -> (unit -> unit Lwt.t) -> unit Lwt.t
+  type backend
+  type buffer
+  type 'a io
+  type id
+  module Stackv4 : V1_LWT.STACKV4
+  val create_backend : unit -> backend
+  val create_stack : Console.t -> backend -> Ipaddr.V4.t -> Ipaddr.V4.t -> Ipaddr.V4.t list -> Stackv4.t Lwt.t
+  val create_backend_listener : backend -> (buffer -> unit io) -> id
+  val disable_backend_listener : backend -> id -> unit
+  val create_pcap_recorder : backend -> Lwt_io.output_channel -> int Lwt.t
+  val record_pcap : backend -> string -> (unit -> unit Lwt.t) -> unit Lwt.t
 end
 
 module VNETIF_STACK ( B : Vnetif_backends.Backend) : VNETIF_STACK = struct
@@ -75,10 +75,10 @@ module VNETIF_STACK ( B : Vnetif_backends.Backend) : VNETIF_STACK = struct
     match (B.register backend) with
     | `Error e -> fail "Error occured while registering to backend" 
     | `Ok id -> (B.set_listen_fn backend id listenf); id
-  
+
   let disable_backend_listener backend id =
     B.set_listen_fn backend id (fun buf -> Lwt.return_unit)
-  
+
   let create_pcap_recorder backend channel =
     let header_buf = Cstruct.create Pcap.sizeof_pcap_header in
     Pcap.LE.set_pcap_header_magic_number header_buf Pcap.magic_number;
@@ -101,15 +101,15 @@ module VNETIF_STACK ( B : Vnetif_backends.Backend) : VNETIF_STACK = struct
       Lwt_io.write channel ((Cstruct.to_string pcap_buf) ^ (Cstruct.to_string buffer)) >>= fun () ->
       Lwt_io.flush channel (* always flush *)
     in
-      let recorder_id = create_backend_listener backend (pcap_record channel) in
+    let recorder_id = create_backend_listener backend (pcap_record channel) in
     Lwt.return recorder_id
 
-    let record_pcap backend pcap_file fn =
-      Lwt_io.with_file ~mode:Lwt_io.output pcap_file (fun oc ->
-          create_pcap_recorder backend oc >>= fun recorder_id ->
-          fn () >>= fun () ->
-          disable_backend_listener backend recorder_id;
-          Lwt.return_unit
-        )
+  let record_pcap backend pcap_file fn =
+    Lwt_io.with_file ~mode:Lwt_io.output pcap_file (fun oc ->
+        create_pcap_recorder backend oc >>= fun recorder_id ->
+        fn () >>= fun () ->
+        disable_backend_listener backend recorder_id;
+        Lwt.return_unit
+      )
 end
 

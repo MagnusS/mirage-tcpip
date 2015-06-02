@@ -15,8 +15,8 @@
  *)
 
 module type Backend = sig
-    include Vnetif.BACKEND
-    val create : unit -> t
+  include Vnetif.BACKEND
+  val create : unit -> t
 end
 
 module Trailing_bytes : Backend = struct
@@ -49,7 +49,7 @@ end
 module Basic : Backend = struct
   module X = Basic_backend.Make
   include X
-      
+
   let create () =
     X.create ~use_async_readers:true ~yield:(fun() -> Lwt_main.yield () ) () 
 end
