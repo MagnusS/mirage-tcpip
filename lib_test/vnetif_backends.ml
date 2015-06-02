@@ -31,6 +31,7 @@ module Trailing_bytes : Backend = struct
     let len = Cstruct.len src in
     let dst = Cstruct.create (len + bytes_to_add) in
     Cstruct.blit src 0 dst 0 len;
+    (*Printf.printf "added %d bytes, orig=%d, dst=%d\n" bytes_to_add (Cstruct.len src) (Cstruct.len dst);*)
     dst
 
   let write t id buffer =
