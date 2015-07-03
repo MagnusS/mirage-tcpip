@@ -59,8 +59,10 @@ module Uniform_packet_loss : Backend = struct
 
   let writev t id buffers =
     if Random.float 1.0 < drop_p then
+    begin
+        MProf.Trace.label "pkt_drop";
         Lwt.return_unit (* drop packet *)
-    else
+    end else
         X.writev t id buffers (* pass to real writev *)
 
   let create () =
