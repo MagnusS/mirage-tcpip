@@ -106,9 +106,8 @@ module Test_iperf (B : Vnetif_backends.Backend) = struct
             wac >>= fun () ->
             let t1 = Unix.gettimeofday () in
             if t1 -. t0 > 1.0 then (
-              MProf.Trace.label "ABORT";
+              MProf.Trace.label "SLOW WRITE";
               print_endline "write_and_check took > 1s!";
-              exit 1
             );
             loop (n-1)
       in
