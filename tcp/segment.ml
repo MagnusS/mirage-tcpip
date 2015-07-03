@@ -354,7 +354,8 @@ module Tx (Time:V1_LWT.TIME) (Clock:V1.CLOCK) = struct
             let { wnd; _ } = q in
             let flags=rexmit_seg.flags in
             let options=[] in (* TODO: put the right options *)
-            q.xmit ~flags ~wnd ~options ~seq rexmit_seg.data
+            Lwt.async ( fun () -> q.xmit ~flags ~wnd ~options ~seq rexmit_seg.data );
+            Lwt.return_unit
           end else
             Lwt.return_unit
         | false ->
