@@ -221,12 +221,12 @@ let test_tcp_iperf_two_stacks_trailing_bytes amt () =
     (Test.tcp_iperf amt)
 
 (* Uncomment to show debug output *)
-(* let () =
+let () =
   let open Tcp in
   [Segment.info; Segment.debug; Pcb.info; Pcb.debug] |> List.iter (fun log ->
     Log.enable log;
     Log.set_stats log false
-  ) *)
+  )
 
 let test_tcp_iperf_two_stacks_uniform_packet_loss amt () =
   let module Test = Test_iperf (Vnetif_backends.Uniform_packet_loss) in
