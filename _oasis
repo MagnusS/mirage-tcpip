@@ -291,7 +291,7 @@ Library "tcpip-stack-socket"
                       io-page.unix
 
 Executable test
-  CompiledObject:     native
+  CompiledObject:     best
   Build$: flag(tests)
   Path: lib_test
   MainIs: test.ml
