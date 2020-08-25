@@ -34,6 +34,7 @@ sig
   type 'a io
   type id
   module Stackv4 : Mirage_stack.V4
+  module Stackv6 : Vnetif_stacks.V6
 
   (** Create a new backend *)
   val create_backend : unit -> backend
@@ -44,6 +45,14 @@ sig
 
   (** [create_stack backend ?mtu ip netmask gateway] adds a listener
       function to the backend *)
+  val create_stack_v6 : ?mtu:int -> ?ip:Ipaddr.V6.t list ->
+    ?netmask:Ipaddr.V6.Prefix.t list ->
+    ?gateways:Ipaddr.V6.t list -> backend -> Stackv6.t Lwt.t
+
+  val create_stack_v4v6 : ?mtu:int -> ipv4_cidr:Ipaddr.V4.Prefix.t -> ?ipv4_gateway:Ipaddr.V4.t ->
+          ?ipv6_ip:Ipaddr.V6.t list -> ?ipv6_netmask:Ipaddr.V6.Prefix.t list -> ?ipv6_gateways:Ipaddr.V6.t list -> 
+          backend -> (Stackv4.t * Stackv6.t) Lwt.t
+
   val create_backend_listener : backend -> (buffer -> unit io) -> id
 
   (** Disable a listener function *)
@@ -64,27 +73,75 @@ struct
 
   module V = Vnetif.Make(B)
   module E = Ethernet.Make(V)
+
   module A = Arp.Make(E)(Time)
-  module Ip = Static_ipv4.Make(Mirage_random_test)(Clock)(E)(A)
-  module Icmp = Icmpv4.Make(Ip)
-  module U = Udp.Make(Ip)(Mirage_random_test)
-  module T = Tcp.Flow.Make(Ip)(Time)(Clock)(Mirage_random_test)
+  module Ip4 = Static_ipv4.Make(Mirage_random_test)(Clock)(E)(A)
+  module Icmp4 = Icmpv4.Make(Ip4)
+  module U4 = Udp.Make(Ip4)(Mirage_random_test)
+  module T4 = Tcp.Flow.Make(Ip4)(Time)(Clock)(Mirage_random_test)
+
+  module Ip6 = Ipv6.Make(E)(Mirage_random_test)(Time)(Clock)
+  module U6 = Udp.Make(Ip6)(Mirage_random_test)
+  module T6 = Tcp.Flow.Make(Ip6)(Time)(Clock)(Mirage_random_test)
+
   module Stackv4 =
-    Tcpip_stack_direct.Make(Time)(Mirage_random_test)(V)(E)(A)(Ip)(Icmp)(U)(T)
+    Tcpip_stack_direct.Make(Time)(Mirage_random_test)(V)(E)(A)(Ip4)(Icmp4)(U4)(T4)
+
+  module Stackv6 =
+    Vnetif_stacks.MakeV6(Time)(Mirage_random_test)(V)(E)(Ip6)(U6)(T6)
 
   let create_backend () =
     B.create ()
+
+  let rec wait_for_ipv6 t () =
+    (* Wait for IP to be valid *)
+    if (List.length (Ip6.get_ip (Stackv6.ipv6 t))) >= 1 then
+    begin
+            Lwt.return t
+    end else
+    Time.sleep_ns (Duration.of_ms 50) >>= fun () ->
+    wait_for_ipv6 t ()
 
   let create_stack ?mtu ~cidr ?gateway backend =
     let size_limit = match mtu with None -> None | Some x -> Some x in
     V.connect ?size_limit backend >>= fun netif ->
     E.connect netif >>= fun ethif ->
     A.connect ethif >>= fun arpv4 ->
-    Ip.connect ~cidr ?gateway ethif arpv4 >>= fun ipv4 ->
-    Icmp.connect ipv4 >>= fun icmpv4 ->
-    U.connect ipv4 >>= fun udpv4 ->
-    T.connect ipv4 >>= fun tcpv4 ->
+    Ip4.connect ~cidr ?gateway ethif arpv4 >>= fun ipv4 ->
+    Icmp4.connect ipv4 >>= fun icmpv4 ->
+    U4.connect ipv4 >>= fun udpv4 ->
+    T4.connect ipv4 >>= fun tcpv4 ->
     Stackv4.connect netif ethif arpv4 ipv4 icmpv4 udpv4 tcpv4
+
+  let create_stack_v6 ?mtu ?ip ?netmask ?gateways backend =
+    let size_limit = match mtu with None -> None | Some x -> Some x in
+    V.connect ?size_limit backend >>= fun netif ->
+    E.connect netif >>= fun ethif ->
+    Ip6.connect ?ip ?netmask ?gateways ethif >>= fun ipv6 ->
+    U6.connect ipv6 >>= fun udpv6 ->
+    T6.connect ipv6 >>= fun tcpv6 ->
+    Stackv6.connect netif ethif ipv6 udpv6 tcpv6 >>= fun s ->
+    wait_for_ipv6 s ()
+
+  let create_stack_v4v6 ?mtu ~ipv4_cidr ?ipv4_gateway ?ipv6_ip ?ipv6_netmask ?ipv6_gateways backend =
+    let size_limit = match mtu with None -> None | Some x -> Some x in
+    V.connect ?size_limit backend >>= fun netif ->
+    E.connect netif >>= fun ethif ->
+
+    A.connect ethif >>= fun arpv4 ->
+    Ip4.connect ~cidr:ipv4_cidr ?gateway:ipv4_gateway ethif arpv4 >>= fun ipv4 ->
+    Icmp4.connect ipv4 >>= fun icmpv4 ->
+    U4.connect ipv4 >>= fun udpv4 ->
+    T4.connect ipv4 >>= fun tcpv4 ->
+    Stackv4.connect netif ethif arpv4 ipv4 icmpv4 udpv4 tcpv4 >>= fun stackv4 ->
+
+    Ip6.connect ?ip:ipv6_ip ?netmask:ipv6_netmask ?gateways:ipv6_gateways ethif >>= fun ipv6 ->
+    U6.connect ipv6 >>= fun udpv6 ->
+    T6.connect ipv6 >>= fun tcpv6 ->
+    Stackv6.connect netif ethif ipv6 udpv6 tcpv6 >>= fun s ->
+    wait_for_ipv6 s () >>= fun stackv6 -> 
+
+    Lwt.return (stackv4, stackv6)
 
   let create_backend_listener backend listenf =
     match (B.register backend) with
